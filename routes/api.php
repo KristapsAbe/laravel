@@ -54,3 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/capsules/{id}', [CapsuleController::class, 'getCapsuleDetails']);
     Route::get('/friends/{friendId}/capsules', [CapsuleController::class, 'getFriendCapsules']);
 });
+
+Route::get('/test', function () {
+    return response()->json(['message' => 'API is working']);
+});
