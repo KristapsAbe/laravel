@@ -62,8 +62,8 @@ class CapsuleController extends Controller
             ]);
 
             Log::info('Capsule created', [
-                'id' => $capsule->id, 
-                'user_id' => $user->id, 
+                'id' => $capsule->id,
+                'user_id' => $user->id,
                 'time' => $capsule->time,
                 'image_comments' => $imageComments
             ]);
@@ -106,7 +106,7 @@ class CapsuleController extends Controller
 
             $capsules = Capsule::query()
                 ->with(['user', 'capsuleUsers' => function($query) {
-                    $query->select('users.id', 'name', 'email');  // Add any other user fields you need
+                    $query->select('users.id', 'name', 'email');
                 }])
                 ->where(function($query) use ($user) {
                     $query->where('user_id', $user->id)
@@ -137,7 +137,6 @@ class CapsuleController extends Controller
                 $capsuleArray = $capsule->toArray();
                 $capsuleArray['is_owner'] = $capsule->user_id === $user->id;
 
-                // Ensure capsule_users is always an array, even if empty
                 $capsuleArray['capsule_users'] = collect($capsule->capsuleUsers)->map(function ($capsuleUser) {
                     return [
                         'user_id' => $capsuleUser->id,
@@ -178,10 +177,8 @@ class CapsuleController extends Controller
 
             \Log::info('Fetching capsules for friend:', ['friendId' => $friendId, 'currentUser' => $currentUser->id]);
 
-            // Validate that the requested friend ID is valid
             $friend = User::findOrFail($friendId);
 
-            // Check if the current user is friends with the capsule owner
             $isFriend = FriendRequest::where(function($query) use ($currentUser, $friendId) {
                 $query->where('user_id', $currentUser->id)
                     ->where('friend_id', $friendId)
@@ -194,11 +191,9 @@ class CapsuleController extends Controller
 
             \Log::info('Is friend:', ['isFriend' => $isFriend]);
 
-            // First, let's check how many total capsules this user has
             $totalCapsules = Capsule::where('user_id', $friendId)->count();
             \Log::info('Total capsules for this user:', ['total' => $totalCapsules]);
 
-            // Log capsules with each privacy setting
             $privateCapsules = Capsule::where('user_id', $friendId)->where('privacy', 'private')->count();
             $friendsCapsules = Capsule::where('user_id', $friendId)->where('privacy', 'friends')->count();
             $publicCapsules = Capsule::where('user_id', $friendId)->where('privacy', 'public')->count();
@@ -209,26 +204,21 @@ class CapsuleController extends Controller
                 'public' => $publicCapsules
             ]);
 
-            // Simplified query - start by getting all capsules for this user
             $allUserCapsules = Capsule::with(['user', 'capsuleUsers'])
                 ->where('user_id', $friendId)
                 ->get();
 
             \Log::info('All capsules for this user:', ['count' => $allUserCapsules->count()]);
 
-            // Then filter them based on privacy rules
             $visibleCapsules = $allUserCapsules->filter(function ($capsule) use ($currentUser, $isFriend, $friendId) {
-                // Public capsules are visible to everyone
                 if ($capsule->privacy === 'public') {
                     return true;
                 }
 
-                // Friends capsules are visible if users are friends
                 if ($capsule->privacy === 'friends' && $isFriend) {
                     return true;
                 }
 
-                // Private capsules are only visible to the owner
                 if ($capsule->privacy === 'private' && $currentUser->id === $friendId) {
                     return true;
                 }
@@ -238,20 +228,17 @@ class CapsuleController extends Controller
 
             \Log::info('Visible capsules after filtering:', ['count' => $visibleCapsules->count()]);
 
-            // Transform the capsules for the response
             $transformedCapsules = $visibleCapsules->map(function ($capsule) use ($currentUser, $friendId) {
                 $capsuleArray = $capsule->toArray();
                 $capsuleArray['is_owner'] = $capsule->user_id === $currentUser->id;
                 $capsuleArray['is_friend_owner'] = $capsule->user_id === $friendId;
 
-                // Add debug info
                 $capsuleArray['debug_info'] = [
                     'id' => $capsule->id,
                     'privacy' => $capsule->privacy,
                     'status' => $capsule->status
                 ];
 
-                // Transform capsule users array
                 $capsuleArray['capsule_users'] = collect($capsule->capsuleUsers)->map(function ($capsuleUser) {
                     return [
                         'user_id' => $capsuleUser->id,
@@ -260,7 +247,6 @@ class CapsuleController extends Controller
                     ];
                 })->values()->all();
 
-                // Format time for human readability
                 $dateTime = new \DateTime($capsule->time);
                 $capsuleArray['time'] = [
                     'original' => $capsule->time,
@@ -304,24 +290,20 @@ class CapsuleController extends Controller
         try {
             $capsule = Capsule::findOrFail($id);
 
-            // Get current images and comments from JSON fields
             $currentImages = json_decode($capsule->images ?? '[]', true);
             $currentComments = json_decode($capsule->image_comments ?? '{}', true);
 
-            // Process and store new images
             foreach($request->file('images') as $index => $image) {
                 $path = $image->store('capsules', 'public');
                 $currentImages[] = $path;
                 $currentComments[$path] = $request->input("image_comments.$index", '');
             }
 
-            // Update capsule with new images and comments
             $capsule->update([
                 'images' => json_encode($currentImages),
                 'image_comments' => json_encode($currentComments)
             ]);
 
-            // Update the capsule_user status
             $capsuleUser = CapsuleUser::where('capsule_id', $id)
                 ->where('user_id', auth()->id())
                 ->first();
@@ -394,7 +376,6 @@ class CapsuleController extends Controller
 
             Log::info('Validated data in create method:', $validatedData);
 
-            // Add validation debugging
             Log::info('Form data structure', [
                 'has_images' => $request->hasFile('images'),
                 'image_count' => $request->hasFile('images') ? count($request->file('images')) : 0,
@@ -434,7 +415,6 @@ class CapsuleController extends Controller
                 }
             } else {
                 Log::warning('No images found in the request');
-                // Validate if this is expected or not
             }
 
             $user = Auth::user();
@@ -446,7 +426,6 @@ class CapsuleController extends Controller
             $time = Carbon::parse($validatedData['time']);
             Log::info('Parsed time in create method:', ['time' => $time->toDateTimeString()]);
 
-            // Log before database operation
             Log::info('Attempting to create capsule record', [
                 'user_id' => $user->id,
                 'title' => $validatedData['title'],
@@ -549,13 +528,10 @@ class CapsuleController extends Controller
                 }])
                 ->where('id', $id)
                 ->where(function($query) use ($user) {
-                    // Access control: User can view if they are the owner
                     $query->where('user_id', $user->id)
-                        // Or if they are one of the shared users
                         ->orWhereHas('capsuleUsers', function($query) use ($user) {
                             $query->where('users.id', $user->id);
                         })
-                        // Or if it's a public capsule from a friend
                         ->orWhere(function($query) use ($user) {
                             $query->where('privacy', 'public')
                                 ->whereIn('user_id', function($subQuery) use ($user) {
@@ -575,14 +551,11 @@ class CapsuleController extends Controller
                 })
                 ->firstOrFail();
 
-            // Determine if current user is the owner
             $isOwner = $capsule->user_id === $user->id;
 
-            // Process images and comments
             $images = json_decode($capsule->images ?? '[]', true);
             $imageComments = json_decode($capsule->image_comments ?? '{}', true);
 
-            // Format images with their comments for front-end
             $processedImages = [];
             foreach ($images as $imagePath) {
                 $processedImages[] = [
@@ -592,7 +565,6 @@ class CapsuleController extends Controller
                 ];
             }
 
-            // Format capsule users data
             $capsuleUsers = collect($capsule->capsuleUsers)->map(function ($capsuleUser) {
                 return [
                     'user_id' => $capsuleUser->id,
@@ -602,14 +574,12 @@ class CapsuleController extends Controller
                 ];
             })->values()->all();
 
-            // Get related timestamp information
             $now = Carbon::now();
             $capsuleTime = Carbon::parse($capsule->time);
             $isAvailable = $now->greaterThanOrEqualTo($capsuleTime);
             $daysUntilAvailable = $now->diffInDays($capsuleTime, false);
             $createdTimeAgo = Carbon::parse($capsule->created_at)->diffForHumans();
 
-            // Build response data
             $result = [
                 'id' => $capsule->id,
                 'title' => $capsule->title,
@@ -673,23 +643,40 @@ class CapsuleController extends Controller
             ], 500);
         }
     }
-    
+
     public function getCapsuleCount()
     {
         try {
             $userId = Auth::id();
             Log::info('User ID:', ['user_id' => $userId]);
-            
-            $count = Capsule::where('user_id', $userId)->count();
-            Log::info('Capsule count retrieved', ['count' => $count]);
-    
-            return response()->json(['count' => $count]);
+
+            // Count user's own capsules
+            $ownCount = Capsule::where('user_id', $userId)->count();
+
+            // Count capsules shared with the user
+            $sharedCount = DB::table('capsule_user')
+                ->where('user_id', $userId)
+                ->count();
+
+            $totalCount = $ownCount + $sharedCount;
+
+            Log::info('Capsule count retrieved', [
+                'own_count' => $ownCount,
+                'shared_count' => $sharedCount,
+                'total_count' => $totalCount
+            ]);
+
+            return response()->json([
+                'count' => $totalCount,
+                'own_count' => $ownCount,
+                'shared_count' => $sharedCount
+            ]);
         } catch (\Exception $e) {
             Log::error('Error in getCapsuleCount', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-    
+
             return response()->json([
                 'message' => 'An error occurred while retrieving capsule count',
                 'error' => $e->getMessage()
@@ -758,15 +745,13 @@ class CapsuleController extends Controller
 {
     try {
         $currentYear = Carbon::now()->year;
-        
-        // Get counts of capsules grouped by creation month
+
         $monthlyStats = Capsule::selectRaw('MONTH(created_at) as month, COUNT(*) as total_created')
             ->whereYear('created_at', $currentYear)
             ->groupBy('month')
             ->orderBy('month')
             ->get();
-            
-        // Initialize all months with zero counts
+
         $formattedStats = collect(range(1, 12))->mapWithKeys(function ($month) {
             return [$month => [
                 'month' => Carbon::create()->month($month)->format('M'),
@@ -777,8 +762,7 @@ class CapsuleController extends Controller
                 'friends' => 0
             ]];
         });
-        
-        // Get detailed stats for each month
+
         $detailedStats = Capsule::selectRaw('
             MONTH(created_at) as month,
             COUNT(*) as total_created,
@@ -789,8 +773,7 @@ class CapsuleController extends Controller
         ->whereYear('created_at', $currentYear)
         ->groupBy('month')
         ->get();
-        
-        // Fill in actual counts
+
         $detailedStats->each(function ($stat) use (&$formattedStats) {
             $formattedStats[$stat->month] = [
                 'month' => Carbon::create()->month($stat->month)->format('M'),
@@ -804,9 +787,9 @@ class CapsuleController extends Controller
         $response = $formattedStats->values();
 
         Log::info('Monthly creation stats retrieved', ['stats' => $response]);
-        
+
         return response()->json($response);
-        
+
     } catch (\Exception $e) {
         Log::error('Error in getMonthlyStats', [
             'message' => $e->getMessage(),

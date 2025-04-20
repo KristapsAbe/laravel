@@ -38,9 +38,12 @@ class RegisterController extends Controller
             'expires_at' => now()->addMinutes(15),
         ]);
 
-        Mail::raw("Your verification code is: $verificationCode", function ($message) use ($request) {
-            $message->to($request->email)->subject('Email Verification');
-        });
+        Resend::emails()->send([
+            'from' => 'Your App <noreply@yourdomain.com>',
+            'to' => $request->email,
+            'subject' => 'Email Verification',
+            'text' => "Your verification code is: $verificationCode",
+        ]);
 
         return response()->json([
             'message' => 'Verification code sent to your email.',

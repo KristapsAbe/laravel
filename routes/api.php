@@ -7,6 +7,8 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CapsuleController;
 use App\Http\Controllers\FriendController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\CapsuleCommentController;
 
 Route::post('/register', [RegisterController::class, 'register']);
 Route::post('/verify-email', [RegisterController::class, 'verifyEmail']);
@@ -33,9 +35,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/get-profile', [ProfileController::class, 'getProfile']);
 });
 Route::get('/capsules/monthly-stats', [CapsuleController::class, 'getMonthlyStats']);
+Route::get('/high-rated-reviews', [ReviewController::class, 'getHighRatedReviews']);
+
+Route::middleware('auth:api')->group(function () {
+    Route::post('/capsule-comments', [CapsuleCommentController::class, 'store']);
+    Route::get('/capsule-comments/{capsuleId}', [CapsuleCommentController::class, 'getComments']);
+});
+
+Route::get('/activities/comments', [CapsuleCommentController::class, 'getCommentGeneralInfo']);
+Route::middleware('auth:sanctum')->get('/friends/capsules', [FriendController::class, 'getFriendsCapsules']);
 
 Route::middleware('auth:sanctum')->group(function () {
-
+    Route::get('/reviews/should-show', [ReviewController::class, 'shouldShowReview']);
+    Route::post('/reviews', [ReviewController::class, 'store']);
+});
+Route::middleware('auth:sanctum')->group(function () {
     Route::get('/friends', [FriendController::class, 'index']);
     Route::post('/friends/request', [FriendController::class, 'sendRequest']);
     Route::get('/friends/requests', [FriendController::class, 'getPendingRequests']);

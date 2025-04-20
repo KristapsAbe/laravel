@@ -26,6 +26,7 @@ class Capsule extends Model
     ];
 
     protected $with = ['user', 'capsuleUsers'];
+    public $timestamps = true;
 
     public function user()
     {

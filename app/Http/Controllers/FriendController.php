@@ -10,11 +10,12 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use App\Notifications\FriendRequestNotification;
+use App\Models\Capsule;
 
 
 class FriendController extends Controller
 {
-    
+
     public function index()
     {
         try {
@@ -36,7 +37,7 @@ class FriendController extends Controller
                 unset($user->receivedFriendRequests);
                 return $user;
             });
-            
+
             return response()->json($users);
         } catch (\Exception $e) {
             Log::error('Error in FriendController@index: ' . $e->getMessage());
@@ -65,14 +66,12 @@ class FriendController extends Controller
                 'target_user_id' => 'required|exists:users,id',
             ]);
 
-            // Check if trying to send request to self
             if ($validatedData['target_user_id'] == Auth::id()) {
                 return response()->json([
                     'message' => 'Cannot send friend request to yourself'
                 ], 400);
             }
 
-            // Check for existing friend request in either direction
             $existingFriendRequest = FriendRequest::where(function($query) use ($validatedData) {
                 $query->where('user_id', Auth::id())
                       ->where('friend_id', $validatedData['target_user_id']);
@@ -89,7 +88,7 @@ class FriendController extends Controller
                     'declined' => 'Previous request was declined. Please try again later',
                     default => 'Friend request already exists'
                 };
-                
+
                 return response()->json([
                     'message' => $message,
                     'status' => $status
@@ -103,7 +102,7 @@ class FriendController extends Controller
             ]);
 
             $sender = Auth::user();
-            
+
             Log::info('Friend request sent successfully', [
                 'sender_id' => Auth::id(),
                 'recipient_id' => $validatedData['target_user_id']
@@ -114,7 +113,7 @@ class FriendController extends Controller
                 'notification' => "{$sender->name} sent you a friend request",
                 'friendrequest' => $friendRequest
             ], 201);
-            
+
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation error in friend request:', [
                 'errors' => $e->errors()
@@ -141,7 +140,7 @@ class FriendController extends Controller
 
     return response()->json(['count' => $count]);
 }
-    
+
 
     public function getPendingRequests()
     {
@@ -156,21 +155,20 @@ class FriendController extends Controller
     public function acceptRequest($id)
     {
         $friendRequest = FriendRequest::findOrFail($id);
-    
+
         if ($friendRequest->friend_id !== Auth::id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-    
+
         $friendRequest->status = 'accepted';
         $friendRequest->save();
-    
-        // Create a reverse friendship
+
         FriendRequest::create([
             'user_id' => Auth::id(),
             'friend_id' => $friendRequest->user_id,
             'status' => 'accepted'
         ]);
-    
+
         return response()->json(['message' => 'Friend request accepted']);
     }
     public function getPendingRequestsCount()
@@ -225,6 +223,56 @@ class FriendController extends Controller
         }
     }
 
+    public function getFriendsCapsules(Request $request)
+    {
+        try {
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json(['error' => 'Unauthenticated'], 401);
+            }
+
+            $friendIds = FriendRequest::where(function($query) use ($user) {
+                $query->where('user_id', $user->id)
+                    ->orWhere('friend_id', $user->id);
+            })
+                ->where('status', 'accepted')
+                ->get()
+                ->map(function($friendship) use ($user) {
+                    return $friendship->user_id == $user->id ?
+                        $friendship->friend_id : $friendship->user_id;
+                });
+
+            $friends = User::whereIn('id', $friendIds)->get();
+
+            $friendsData = [];
+
+            foreach ($friends as $friend) {
+                $totalCapsules = $friend->capsules()->count();
+
+                $sharedCapsules = Capsule::whereHas('capsuleUsers', function($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })->where('user_id', $friend->id)->count();
+
+                $friendsData[] = [
+                    'id' => $friend->id,
+                    'name' => $friend->name,
+                    'capsules' => $totalCapsules,
+                    'shared' => $sharedCapsules,
+                    'active' => true,
+                    'avatar' => $friend->profile_image
+                ];
+            }
+
+            return response()->json($friendsData);
+        } catch (\Exception $e) {
+            Log::error('Error in getFriendsCapsules: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+
+            return response()->json(['error' => 'Server error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
     public function declineRequest($id)
     {
         try {
@@ -234,10 +282,8 @@ class FriendController extends Controller
                 return response()->json(['message' => 'Unauthorized'], 403);
             }
 
-            // Delete the friend request instead of changing its status
             $friendRequest->delete();
 
-            // Log the action
             Log::info('Friend request declined and deleted', [
                 'decliner_id' => Auth::id(),
                 'requester_id' => $friendRequest->user_id,
@@ -259,7 +305,6 @@ class FriendController extends Controller
     public function getAcceptedFriends()
     {
         try {
-            // Get all accepted friend requests where the current user is either the sender or receiver
             $friendIds = FriendRequest::where(function($query) {
                 $query->where('user_id', Auth::id())
                     ->orWhere('friend_id', Auth::id());
@@ -267,13 +312,11 @@ class FriendController extends Controller
             ->where('status', 'accepted')
             ->get()
             ->map(function($friendship) {
-                // Return the ID of the other user (not the current user)
                 return $friendship->user_id == Auth::id()
                     ? $friendship->friend_id
                     : $friendship->user_id;
             });
 
-            // Get the user details for all friends
             $friends = User::whereIn('id', $friendIds)
                 ->select('id', 'name', 'profile_image')
                 ->get()

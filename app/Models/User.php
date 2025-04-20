@@ -54,4 +54,8 @@ class User extends Authenticatable
                     ->wherePivot('status', 'accepted')
             );
     }
+    public function review()
+    {
+        return $this->hasOne(Review::class);
+    }
 }

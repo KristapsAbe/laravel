@@ -12,6 +12,7 @@ class CapsuleUser extends Model
         'user_id',
         'status'
     ];
+    public $timestamps = true;
 
     public function capsule()
     {
