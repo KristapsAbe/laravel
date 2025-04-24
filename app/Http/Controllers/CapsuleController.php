@@ -283,7 +283,7 @@ class CapsuleController extends Controller
     public function acceptCapsule(Request $request, $id)
     {
         $request->validate([
-            'images.*' => 'required|image|max:2048', // 2MB max
+            'images.*' => 'required|image|max:65536',
             'image_comments.*' => 'nullable|string|max:1000',
         ]);
 
@@ -650,10 +650,8 @@ class CapsuleController extends Controller
             $userId = Auth::id();
             Log::info('User ID:', ['user_id' => $userId]);
 
-            // Count user's own capsules
             $ownCount = Capsule::where('user_id', $userId)->count();
 
-            // Count capsules shared with the user
             $sharedCount = DB::table('capsule_user')
                 ->where('user_id', $userId)
                 ->count();

@@ -59,7 +59,7 @@ class CapsuleCommentController extends Controller
         $formattedComments = $comments->map(function($comment) {
             return [
                 'id' => $comment->id,
-                'content' => $comment->comment,  // Map comment to content
+                'content' => $comment->comment,
                 'created_at' => $comment->created_at,
                 'user' => [
                     'id' => $comment->user->id,

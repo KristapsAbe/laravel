@@ -51,7 +51,7 @@ class LoginTest extends TestCase
             'password' => 'wrongpassword',
         ]);
 
-        $response->assertStatus(401);  
+        $response->assertStatus(401);
     }
 
     public function test_user_receives_auth_token_after_successful_login()
@@ -59,14 +59,14 @@ class LoginTest extends TestCase
         $user = User::factory()->create([
             'password' => Hash::make('password123'),
         ]);
-    
+
         $response = $this->post('/api/login', [
             'email' => $user->email,
             'password' => 'password123',
         ]);
-    
+
         $response->assertStatus(200);
-    
+
         $response->assertJsonStructure([
             'access_token',
             'token_type',
@@ -84,7 +84,7 @@ class LoginTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(422) // Assuming you validate request data
+        $response->assertStatus(422)
             ->assertJsonValidationErrors(['email']);
     }
 
@@ -98,7 +98,7 @@ class LoginTest extends TestCase
             'email' => $user->email,
         ]);
 
-        $response->assertStatus(422) // Assuming you validate request data
+        $response->assertStatus(422)
             ->assertJsonValidationErrors(['password']);
     }
 
@@ -109,7 +109,6 @@ class LoginTest extends TestCase
             'password' => 'password123',
         ]);
 
-        // Assuming the application returns 401 for invalid credentials
         $response->assertStatus(401);
     }
 }

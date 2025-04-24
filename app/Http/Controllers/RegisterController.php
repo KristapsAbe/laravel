@@ -11,8 +11,6 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Resend\Laravel\Facades\Resend;
-
 
 class RegisterController extends Controller
 {
@@ -38,67 +36,78 @@ class RegisterController extends Controller
             'expires_at' => now()->addMinutes(15),
         ]);
 
-        Resend::emails()->send([
-            'from' => 'Your App <noreply@yourdomain.com>',
-            'to' => $request->email,
-            'subject' => 'Email Verification',
-            'text' => "Your verification code is: $verificationCode",
-        ]);
+        try {
+            Mail::raw("Your verification code is: $verificationCode", function ($message) use ($request) {
+                $message->to($request->email)
+                    ->subject('Email Verification');
+            });
 
-        return response()->json([
-            'message' => 'Verification code sent to your email.',
-        ], 200);
+            Log::info('Email sent successfully', ['to' => $request->email]);
+
+            return response()->json([
+                'message' => 'Verification code sent to your email.',
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Email sending failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Failed to send verification code. Please try again later.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
     }
 
     public function verifyEmail(Request $request)
-{
-    $validator = Validator::make($request->all(), [
-        'email' => 'required|string|email|max:255',
-        'name' => 'required|string|max:255',
-        'password' => 'required|string|min:8',
-        'verification_code' => 'required|string|size:6',
-    ]);
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|string|email|max:255',
+            'name' => 'required|string|max:255',
+            'password' => 'required|string|min:8',
+            'verification_code' => 'required|string|size:6',
+        ]);
 
-    if ($validator->fails()) {
+        if ($validator->fails()) {
+            return response()->json([
+                'errors' => $validator->errors()
+            ], 400);
+        }
+
+        $verificationCode = VerificationCode::where('email', $request->email)
+            ->where('code', $request->verification_code)
+            ->where('expires_at', '>', now())
+            ->first();
+
+        if (!$verificationCode) {
+            return response()->json([
+                'message' => 'Invalid or expired verification code.',
+            ], 400);
+        }
+
+        if (User::where('email', $request->email)->exists()) {
+            return response()->json([
+                'message' => 'User with this email already exists.',
+            ], 409);
+        }
+
+        $user = User::create([
+            'email' => $request->email,
+            'name' => $request->name,
+            'password' => Hash::make($request->password),
+            'email_verified_at' => now(),
+        ]);
+
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        $verificationCode->delete();
+
         return response()->json([
-            'errors' => $validator->errors()
-        ], 400);
+            'message' => 'User successfully registered and verified.',
+            'name' => $user->name,
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+        ], 201);
     }
-
-    $verificationCode = VerificationCode::where('email', $request->email)
-        ->where('code', $request->verification_code)
-        ->where('expires_at', '>', now())
-        ->first();
-
-    if (!$verificationCode) {
-        return response()->json([
-            'message' => 'Invalid or expired verification code.',
-        ], 400);
-    }
-
-    if (User::where('email', $request->email)->exists()) {
-        return response()->json([
-            'message' => 'User with this email already exists.',
-        ], 409);
-    }
-
-    $user = User::create([
-        'email' => $request->email,
-        'name' => $request->name,
-        'password' => Hash::make($request->password),
-        'email_verified_at' => now(),
-    ]);
-
-    $token = $user->createToken('auth_token')->plainTextToken;
-
-    $verificationCode->delete();
-
-    return response()->json([
-        'message' => 'User successfully registered and verified.',
-        'name' => $user->name,
-        'access_token' => $token,
-        'token_type' => 'Bearer',
-    ], 201);
-}
-
 }
